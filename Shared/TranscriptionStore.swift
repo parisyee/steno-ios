@@ -11,28 +11,30 @@ class TranscriptionStore: ObservableObject {
         load()
     }
 
-    // MARK: - Check for shared audio and process it
+    // MARK: - Entry points
 
+    /// Transcribe an audio file at an arbitrary URL. Used by the share-extension
+    /// flow and (future) by in-app recording.
+    func transcribe(audioFileURL: URL) {
+        guard let audioData = try? Data(contentsOf: audioFileURL) else { return }
+        transcribe(audioData: audioData)
+    }
+
+    /// Picks up audio dropped by the share extension in the App Group container,
+    /// deletes the shared file, and transcribes.
     func processSharedFile() {
         let fileURL = Config.sharedFileURL
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
-
-        isProcessing = true
-
-        // Read the audio data and delete the shared file
-        guard let audioData = try? Data(contentsOf: fileURL) else {
-            isProcessing = false
-            return
-        }
+        guard let audioData = try? Data(contentsOf: fileURL) else { return }
         try? FileManager.default.removeItem(at: fileURL)
-
-        // Send to transcription API
         transcribe(audioData: audioData)
     }
 
     // MARK: - API call
 
     private func transcribe(audioData: Data) {
+        isProcessing = true
+
         var request = URLRequest(url: Config.transcribeURL)
         request.httpMethod = "POST"
 
