@@ -1,0 +1,62 @@
+name: Steno
+options:
+  bundleIdPrefix: com.parisyee
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  Steno:
+    type: application
+    platform: iOS
+    sources:
+      - path: Steno
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.parisyee.steno
+        CODE_SIGN_ENTITLEMENTS: Steno/Steno.entitlements
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_CFBundleDisplayName: Steno
+    info:
+      path: Steno/Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: com.parisyee.steno
+            CFBundleURLSchemes:
+              - steno
+    dependencies:
+      - target: StenoShareExtension
+
+  StenoShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: StenoShareExtension
+        excludes:
+          - Info.plist
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.parisyee.steno.StenoShareExtension
+        CODE_SIGN_ENTITLEMENTS: StenoShareExtension/StenoShareExtension.entitlements
+        INFOPLIST_KEY_CFBundleDisplayName: Steno
+    info:
+      path: StenoShareExtension/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule: 'SUBQUERY(extensionItems, $item, SUBQUERY($item.attachments, $att, ANY $att.registeredTypeIdentifiers UTI-CONFORMS-TO "public.audio").@count > 0).@count > 0'
