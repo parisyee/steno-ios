@@ -1,15 +1,31 @@
 import Foundation
 
-struct Transcription: Identifiable, Codable {
+struct Transcription: Identifiable, Codable, Equatable, Hashable {
     let id: UUID
-    let date: Date
+    let filename: String?
+    let title: String?
+    let description: String?
     let text: String
-    let error: String?
+    let cleaned: Cleaned?
+    let createdAt: Date
 
-    init(text: String, error: String? = nil) {
-        self.id = UUID()
-        self.date = Date()
-        self.text = text
-        self.error = error
+    struct Cleaned: Codable, Equatable, Hashable {
+        let light: String?
+        let polished: String?
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, filename, title, description, text, cleaned
+        case createdAt = "created_at"
+    }
+
+    var displayTitle: String {
+        if let title, !title.isEmpty { return title }
+        if let filename, !filename.isEmpty { return filename }
+        return "Untitled"
+    }
+
+    var hasCleanedVariants: Bool {
+        (cleaned?.light?.isEmpty == false) || (cleaned?.polished?.isEmpty == false)
     }
 }

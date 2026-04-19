@@ -24,18 +24,20 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.parisyee.steno
         CODE_SIGN_ENTITLEMENTS: Steno/Steno.entitlements
-        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_CFBundleDisplayName: Steno
     info:
       path: Steno/Info.plist
       properties:
+        CFBundleDisplayName: Steno
         CFBundleURLTypes:
           - CFBundleTypeRole: Editor
             CFBundleURLName: com.parisyee.steno
             CFBundleURLSchemes:
               - steno
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
     dependencies:
       - target: StenoShareExtension
 
@@ -55,6 +57,7 @@ targets:
     info:
       path: StenoShareExtension/Info.plist
       properties:
+        CFBundleDisplayName: Steno
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
