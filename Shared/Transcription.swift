@@ -6,16 +6,12 @@ struct Transcription: Identifiable, Codable, Equatable, Hashable {
     let title: String?
     let description: String?
     let text: String
-    let cleaned: Cleaned?
+    let cleanedPolished: String?
     let createdAt: Date
 
-    struct Cleaned: Codable, Equatable, Hashable {
-        let light: String?
-        let polished: String?
-    }
-
     enum CodingKeys: String, CodingKey {
-        case id, filename, title, description, text, cleaned
+        case id, filename, title, description, text
+        case cleanedPolished = "cleaned_polished"
         case createdAt = "created_at"
     }
 
@@ -25,7 +21,7 @@ struct Transcription: Identifiable, Codable, Equatable, Hashable {
         return "Untitled"
     }
 
-    var hasCleanedVariants: Bool {
-        (cleaned?.light?.isEmpty == false) || (cleaned?.polished?.isEmpty == false)
+    var hasPolishedVariant: Bool {
+        cleanedPolished?.isEmpty == false
     }
 }

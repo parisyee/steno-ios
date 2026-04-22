@@ -1,64 +1,144 @@
 import UIKit
-import Social
-import MobileCoreServices
 import UniformTypeIdentifiers
 
-class ShareViewController: SLComposeServiceViewController {
+class ShareViewController: UIViewController {
 
-    override func isContentValid() -> Bool {
-        return true
+    private let titleLabel = UILabel()
+    private let polishLabel = UILabel()
+    private let polishSublabel = UILabel()
+    private let polishSwitch = UISwitch()
+    private let uploadButton = UIButton(type: .system)
+    private let cancelButton = UIButton(type: .system)
+    private let activity = UIActivityIndicatorView(style: .medium)
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+        buildUI()
     }
 
-    override func didSelectPost() {
+    // MARK: - UI
+
+    private func buildUI() {
+        titleLabel.text = "Upload to Steno"
+        titleLabel.font = .preferredFont(forTextStyle: .title2).withSymbolicTraits(.traitBold)
+        titleLabel.textAlignment = .center
+
+        polishLabel.text = "Generate polished version"
+        polishLabel.font = .preferredFont(forTextStyle: .body)
+
+        polishSublabel.text = "Cleans up disfluencies and smooths stutters. Uses more tokens."
+        polishSublabel.font = .preferredFont(forTextStyle: .footnote)
+        polishSublabel.textColor = .secondaryLabel
+        polishSublabel.numberOfLines = 0
+
+        polishSwitch.isOn = false
+
+        var uploadConfig = UIButton.Configuration.filled()
+        uploadConfig.title = "Upload"
+        uploadConfig.buttonSize = .large
+        uploadConfig.cornerStyle = .medium
+        uploadButton.configuration = uploadConfig
+        uploadButton.addTarget(self, action: #selector(didTapUpload), for: .touchUpInside)
+
+        var cancelConfig = UIButton.Configuration.plain()
+        cancelConfig.title = "Cancel"
+        cancelConfig.buttonSize = .large
+        cancelButton.configuration = cancelConfig
+        cancelButton.addTarget(self, action: #selector(didTapCancel), for: .touchUpInside)
+
+        let polishRow = UIStackView(arrangedSubviews: [polishLabel, polishSwitch])
+        polishRow.axis = .horizontal
+        polishRow.alignment = .center
+        polishRow.spacing = 12
+
+        let polishBlock = UIStackView(arrangedSubviews: [polishRow, polishSublabel])
+        polishBlock.axis = .vertical
+        polishBlock.spacing = 6
+
+        let buttonStack = UIStackView(arrangedSubviews: [uploadButton, cancelButton])
+        buttonStack.axis = .vertical
+        buttonStack.spacing = 4
+
+        let root = UIStackView(arrangedSubviews: [titleLabel, polishBlock, buttonStack])
+        root.axis = .vertical
+        root.spacing = 24
+        root.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(root)
+
+        activity.translatesAutoresizingMaskIntoConstraints = false
+        activity.hidesWhenStopped = true
+        view.addSubview(activity)
+
+        NSLayoutConstraint.activate([
+            root.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            root.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
+            root.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
+            activity.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            activity.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+    }
+
+    // MARK: - Actions
+
+    @objc private func didTapCancel() {
+        extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+    }
+
+    @objc private func didTapUpload() {
+        setBusy(true)
+        let polish = polishSwitch.isOn
+
         guard let item = extensionContext?.inputItems.first as? NSExtensionItem,
-              let attachment = item.attachments?.first else {
+              let attachment = item.attachments?.first,
+              attachment.hasItemConformingToTypeIdentifier(UTType.audio.identifier) else {
             complete()
             return
         }
 
-        let audioType = UTType.audio.identifier
+        attachment.loadItem(forTypeIdentifier: UTType.audio.identifier, options: nil) { [weak self] data, _ in
+            guard let self else { return }
 
-        if attachment.hasItemConformingToTypeIdentifier(audioType) {
-            attachment.loadItem(forTypeIdentifier: audioType, options: nil) { [weak self] data, error in
-                guard let self = self else { return }
-
-                var fileURL: URL?
-
-                if let url = data as? URL {
-                    fileURL = url
-                } else if let data = data as? Data {
-                    // Write data to temp file first
-                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_audio.m4a")
-                    try? data.write(to: tempURL)
-                    fileURL = tempURL
-                }
-
-                if let sourceURL = fileURL {
-                    // Copy to shared App Group container
-                    let destURL = Config.sharedFileURL
-                    try? FileManager.default.removeItem(at: destURL)
-                    try? FileManager.default.copyItem(at: sourceURL, to: destURL)
-
-                    // Open main app to process the file
-                    self.openMainApp()
-                }
-
-                self.complete()
+            var sourceURL: URL?
+            if let url = data as? URL {
+                sourceURL = url
+            } else if let data = data as? Data {
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_audio.m4a")
+                try? data.write(to: tempURL)
+                sourceURL = tempURL
             }
-        } else {
-            complete()
+
+            if let sourceURL {
+                let destURL = Config.sharedFileURL
+                try? FileManager.default.removeItem(at: destURL)
+                try? FileManager.default.copyItem(at: sourceURL, to: destURL)
+                DispatchQueue.main.async {
+                    self.openMainApp(polish: polish)
+                    self.complete()
+                }
+            } else {
+                DispatchQueue.main.async { self.complete() }
+            }
         }
     }
 
-    override func configurationItems() -> [Any]! {
-        return []
+    private func setBusy(_ busy: Bool) {
+        uploadButton.isEnabled = !busy
+        cancelButton.isEnabled = !busy
+        polishSwitch.isEnabled = !busy
+        if busy { activity.startAnimating() } else { activity.stopAnimating() }
     }
 
-    private func openMainApp() {
-        // Open the main app via URL scheme
-        let url = URL(string: "steno://transcribe")!
-        var responder: UIResponder? = self
+    private func openMainApp(polish: Bool) {
+        var comps = URLComponents()
+        comps.scheme = "steno"
+        comps.host = "transcribe"
+        if polish {
+            comps.queryItems = [URLQueryItem(name: "polish", value: "1")]
+        }
+        guard let url = comps.url else { return }
 
+        var responder: UIResponder? = self
         while let r = responder {
             if let application = r as? UIApplication {
                 application.open(url, options: [:], completionHandler: nil)
@@ -66,12 +146,17 @@ class ShareViewController: SLComposeServiceViewController {
             }
             responder = r.next
         }
-
-        // Fallback: use the openURL selector
         extensionContext?.open(url, completionHandler: nil)
     }
 
     private func complete() {
         extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+    }
+}
+
+private extension UIFont {
+    func withSymbolicTraits(_ traits: UIFontDescriptor.SymbolicTraits) -> UIFont {
+        guard let descriptor = fontDescriptor.withSymbolicTraits(traits) else { return self }
+        return UIFont(descriptor: descriptor, size: 0)
     }
 }

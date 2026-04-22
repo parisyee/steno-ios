@@ -9,9 +9,12 @@ struct StenoApp: App {
             ContentView()
                 .environmentObject(transcriptionStore)
                 .onOpenURL { url in
-                    if url.scheme == "steno", url.host == "transcribe" {
-                        transcriptionStore.processSharedFile()
-                    }
+                    guard url.scheme == "steno", url.host == "transcribe" else { return }
+                    let polish = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                        .queryItems?
+                        .first(where: { $0.name == "polish" })?
+                        .value == "1"
+                    transcriptionStore.processSharedFile(polish: polish)
                 }
         }
     }

@@ -11,12 +11,11 @@ struct TranscriptionDetailView: View {
     @State private var confirmingDelete = false
 
     enum Variant: Hashable {
-        case raw, light, polished
+        case raw, polished
 
         var label: String {
             switch self {
             case .raw: return "Raw"
-            case .light: return "Light"
             case .polished: return "Polished"
             }
         }
@@ -24,16 +23,14 @@ struct TranscriptionDetailView: View {
 
     private var availableVariants: [Variant] {
         var v: [Variant] = [.raw]
-        if item.cleaned?.light?.isEmpty == false { v.append(.light) }
-        if item.cleaned?.polished?.isEmpty == false { v.append(.polished) }
+        if item.hasPolishedVariant { v.append(.polished) }
         return v
     }
 
     private var currentText: String {
         switch variant {
         case .raw: return item.text
-        case .light: return item.cleaned?.light ?? item.text
-        case .polished: return item.cleaned?.polished ?? item.text
+        case .polished: return item.cleanedPolished ?? item.text
         }
     }
 

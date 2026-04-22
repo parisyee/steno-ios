@@ -86,8 +86,16 @@ actor APIClient {
 
     // MARK: - Transcribe
 
-    func transcribe(audioData: Data, filename: String = "audio.m4a") async throws -> Transcription {
-        var request = authed(URLRequest(url: Config.transcribeURL))
+    func transcribe(
+        audioData: Data,
+        filename: String = "audio.m4a",
+        polish: Bool = false
+    ) async throws -> Transcription {
+        var comps = URLComponents(url: Config.transcribeURL, resolvingAgainstBaseURL: false)!
+        if polish {
+            comps.queryItems = [URLQueryItem(name: "polish", value: "true")]
+        }
+        var request = authed(URLRequest(url: comps.url!))
         request.httpMethod = "POST"
         request.timeoutInterval = 600
 
