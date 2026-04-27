@@ -25,7 +25,7 @@ actor APIClient {
     init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 600
+        config.timeoutIntervalForResource = 3600
         self.session = URLSession(configuration: config)
 
         let d = JSONDecoder()
@@ -87,8 +87,7 @@ actor APIClient {
     // MARK: - Transcribe
 
     func transcribe(
-        audioData: Data,
-        filename: String = "audio.m4a",
+        audioFileURL: URL,
         polish: Bool = false
     ) async throws -> Transcription {
         var comps = URLComponents(url: Config.transcribeURL, resolvingAgainstBaseURL: false)!
@@ -97,25 +96,71 @@ actor APIClient {
         }
         var request = authed(URLRequest(url: comps.url!))
         request.httpMethod = "POST"
-        request.timeoutInterval = 600
+        request.timeoutInterval = 3600
 
         let boundary = UUID().uuidString
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-        var body = Data()
-        body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
-        body.append("Content-Type: audio/mp4\r\n\r\n")
-        body.append(audioData)
-        body.append("\r\n--\(boundary)--\r\n")
-        request.httpBody = body
+        // Assemble the multipart envelope as a temp file so we can stream
+        // the upload from disk instead of holding the whole body in RAM.
+        let bodyURL = try writeMultipartBody(
+            boundary: boundary,
+            fieldName: "file",
+            filename: audioFileURL.lastPathComponent,
+            contentType: "audio/mp4",
+            sourceFileURL: audioFileURL
+        )
+        defer { try? FileManager.default.removeItem(at: bodyURL) }
 
-        let data = try await send(request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.upload(for: request, fromFile: bodyURL)
+        } catch {
+            throw APIError.transport(error.localizedDescription)
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport("Not an HTTP response")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8)
+            throw APIError.badStatus(http.statusCode, body)
+        }
         do {
             return try decoder.decode(Transcription.self, from: data)
         } catch {
             throw APIError.decoding(String(describing: error))
         }
+    }
+
+    private func writeMultipartBody(
+        boundary: String,
+        fieldName: String,
+        filename: String,
+        contentType: String,
+        sourceFileURL: URL
+    ) throws -> URL {
+        let bodyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("upload-\(UUID().uuidString).body")
+        FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
+        let writer = try FileHandle(forWritingTo: bodyURL)
+        defer { try? writer.close() }
+
+        let prefix = "--\(boundary)\r\n"
+            + "Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(filename)\"\r\n"
+            + "Content-Type: \(contentType)\r\n\r\n"
+        let suffix = "\r\n--\(boundary)--\r\n"
+
+        try writer.write(contentsOf: Data(prefix.utf8))
+
+        let reader = try FileHandle(forReadingFrom: sourceFileURL)
+        defer { try? reader.close() }
+        while let chunk = try reader.read(upToCount: 1024 * 1024), !chunk.isEmpty {
+            try writer.write(contentsOf: chunk)
+        }
+
+        try writer.write(contentsOf: Data(suffix.utf8))
+        return bodyURL
     }
 
     // MARK: - Internals
@@ -147,8 +192,3 @@ actor APIClient {
     }
 }
 
-private extension Data {
-    mutating func append(_ string: String) {
-        if let d = string.data(using: .utf8) { append(d) }
-    }
-}

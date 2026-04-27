@@ -104,14 +104,14 @@ class ShareViewController: UIViewController {
                 return
             }
 
-            // Cloud Run's managed ingress caps request bodies at 32 MB; 25 MB
-            // leaves headroom for multipart overhead. Larger files need the
-            // signed-URL/GCS upload path (not yet implemented).
-            let maxBytes: Int64 = 25 * 1024 * 1024
+            // Server caps uploads at 2 GB (Gemini File API limit); reject
+            // earlier so the user gets a friendly error instead of a 413
+            // mid-upload.
+            let maxBytes: Int64 = 2 * 1024 * 1024 * 1024
             if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
                let size = attrs[.size] as? Int64, size > maxBytes {
                 DispatchQueue.main.async {
-                    self.showError("File is too large. Maximum supported size is 25 MB.")
+                    self.showError("File is too large. Maximum supported size is 2 GB.")
                 }
                 return
             }

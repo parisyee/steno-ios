@@ -13,13 +13,15 @@ StenoShareExtension         ← activates on public.audio UTIs
       │
       │  copies .m4a to App Group container, opens steno://transcribe
       ▼
-Steno (main app)            ← reads file, POSTs to API, shows result
+Steno (main app)            ← streams file from disk, POSTs to API, shows result
       │
-      │  POST /transcribe (multipart, Bearer auth, 600s timeout)
+      │  POST /transcribe (multipart over HTTP/2, Bearer auth, 3600s timeout)
       ▼
 Steno API (Cloud Run)
 https://steno-836899141951.us-central1.run.app
 ```
+
+Uploads stream from disk via `URLSession.upload(for:fromFile:)` — the audio file is never loaded into memory as `Data`. The practical ceiling is 2 GB (Gemini's File API limit).
 
 ## Project layout
 
@@ -82,9 +84,9 @@ To change the bundle ID prefix (currently `com.parisyee`), edit `options.bundleI
 
 1. User taps share on a voice memo in Voice Memos.
 2. `StenoShareExtension` appears because the `.m4a` conforms to `public.audio`.
-3. Extension copies the file to `Config.sharedFileURL` (App Group container).
+3. Extension copies the file to `Config.sharedFileURL` (App Group container) after a 2 GB size check; on failure it shows an alert instead of dismissing silently.
 4. Extension opens `steno://transcribe` — iOS brings the main app forward.
-5. Main app's `onOpenURL` fires → `TranscriptionStore.processSharedFile()` reads the file, deletes it from the shared container, and POSTs to `/transcribe`.
+5. Main app's `onOpenURL` fires → `TranscriptionStore.processSharedFile()` streams the file directly from the shared container into the multipart upload (no `Data(contentsOf:)`). The shared file is deleted only after the upload completes (or fails).
 6. Response `{text, id}` is displayed and persisted in `UserDefaults(suiteName:)` (App Group).
 
 The upload path is also exposed as `TranscriptionStore.transcribe(audioFileURL:)` for future in-app recording.
@@ -105,4 +107,4 @@ file: <audio.m4a>
 { "text": "...", "id": "uuid" }
 ```
 
-Timeout is 600s — long recordings can take several minutes.
+Timeout is 3600s — large uploads + long recordings can take many minutes end-to-end.

@@ -77,22 +77,24 @@ class TranscriptionStore: ObservableObject {
     func processSharedFile(polish: Bool = false) {
         let fileURL = Config.sharedFileURL
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
-        guard let audioData = try? Data(contentsOf: fileURL) else { return }
-        try? FileManager.default.removeItem(at: fileURL)
-        transcribe(audioData: audioData, polish: polish)
+        runTranscribe(audioFileURL: fileURL, deleteAfter: true, polish: polish)
     }
 
     func transcribe(audioFileURL: URL, polish: Bool = false) {
-        guard let audioData = try? Data(contentsOf: audioFileURL) else { return }
-        transcribe(audioData: audioData, polish: polish)
+        runTranscribe(audioFileURL: audioFileURL, deleteAfter: false, polish: polish)
     }
 
-    private func transcribe(audioData: Data, polish: Bool) {
+    private func runTranscribe(audioFileURL: URL, deleteAfter: Bool, polish: Bool) {
         Task {
             isProcessing = true
-            defer { isProcessing = false }
+            defer {
+                isProcessing = false
+                if deleteAfter {
+                    try? FileManager.default.removeItem(at: audioFileURL)
+                }
+            }
             do {
-                let new = try await api.transcribe(audioData: audioData, polish: polish)
+                let new = try await api.transcribe(audioFileURL: audioFileURL, polish: polish)
                 if !transcriptions.contains(where: { $0.id == new.id }) {
                     transcriptions.insert(new, at: 0)
                 }
