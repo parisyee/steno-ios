@@ -96,28 +96,36 @@ class ShareViewController: UIViewController {
             return
         }
 
-        attachment.loadItem(forTypeIdentifier: UTType.audio.identifier, options: nil) { [weak self] data, _ in
+        attachment.loadFileRepresentation(forTypeIdentifier: UTType.audio.identifier) { [weak self] url, error in
             guard let self else { return }
 
-            var sourceURL: URL?
-            if let url = data as? URL {
-                sourceURL = url
-            } else if let data = data as? Data {
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_audio.m4a")
-                try? data.write(to: tempURL)
-                sourceURL = tempURL
+            guard let url else {
+                DispatchQueue.main.async { self.showError(error?.localizedDescription ?? "Could not load audio file.") }
+                return
             }
 
-            if let sourceURL {
-                let destURL = Config.sharedFileURL
-                try? FileManager.default.removeItem(at: destURL)
-                try? FileManager.default.copyItem(at: sourceURL, to: destURL)
+            // Cloud Run's managed ingress caps request bodies at 32 MB; 25 MB
+            // leaves headroom for multipart overhead. Larger files need the
+            // signed-URL/GCS upload path (not yet implemented).
+            let maxBytes: Int64 = 25 * 1024 * 1024
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+               let size = attrs[.size] as? Int64, size > maxBytes {
+                DispatchQueue.main.async {
+                    self.showError("File is too large. Maximum supported size is 25 MB.")
+                }
+                return
+            }
+
+            let destURL = Config.sharedFileURL
+            try? FileManager.default.removeItem(at: destURL)
+            do {
+                try FileManager.default.copyItem(at: url, to: destURL)
                 DispatchQueue.main.async {
                     self.openMainApp(polish: polish)
                     self.complete()
                 }
-            } else {
-                DispatchQueue.main.async { self.complete() }
+            } catch {
+                DispatchQueue.main.async { self.showError("Failed to save audio file: \(error.localizedDescription)") }
             }
         }
     }
@@ -147,6 +155,15 @@ class ShareViewController: UIViewController {
             responder = r.next
         }
         extensionContext?.open(url, completionHandler: nil)
+    }
+
+    private func showError(_ message: String) {
+        setBusy(false)
+        let alert = UIAlertController(title: "Upload Failed", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+            self?.complete()
+        })
+        present(alert, animated: true)
     }
 
     private func complete() {
