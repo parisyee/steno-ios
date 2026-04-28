@@ -2,6 +2,8 @@
 
 iOS app for [Steno](https://github.com/parisyee/steno-cloud). Receives voice notes via the iOS share sheet (from Voice Memos or any app that exports audio), sends them to the Steno API for transcription, and displays the results. Direct in-app recording is planned but not yet implemented.
 
+For cloud provisioning (GCP, Supabase, IAM, secrets) see [`steno-cloud/INFRASTRUCTURE.md`](../steno-cloud/INFRASTRUCTURE.md).
+
 ## Architecture
 
 ```
